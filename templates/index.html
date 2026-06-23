@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Watcher</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+  header { background: #1a1a1a; color: #fff; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 500; }
+  header span { font-size: 11px; color: #888; background: #333; padding: 2px 8px; border-radius: 10px; }
+  .container { max-width: 600px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+  .add-card { background: #fff; border-radius: 12px; border: 0.5px solid #ddd; padding: 1.25rem; margin-bottom: 1.5rem; }
+  .add-card h2 { font-size: 15px; font-weight: 500; margin-bottom: 1rem; color: #333; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+  .field input { width: 100%; padding: 10px 12px; border: 0.5px solid #ccc; border-radius: 8px; font-size: 14px; background: #fafafa; }
+  .field input:focus { outline: none; border-color: #e47911; background: #fff; }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+  button.primary { width: 100%; padding: 12px; background: #e47911; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
+  button.primary:hover { background: #c96a00; }
+  button.primary:disabled { background: #ccc; cursor: not-allowed; }
+
+  #error { display: none; color: #c0392b; font-size: 13px; margin-top: 8px; padding: 8px 12px; background: #fdf0ee; border-radius: 6px; }
+
+  .section-title { font-size: 13px; color: #888; font-weight: 500; margin-bottom: 10px; }
+
+  .product-card { background: #fff; border-radius: 12px; border: 0.5px solid #ddd; padding: 1rem 1.25rem; margin-bottom: 10px; }
+  .product-card.in-stock { border-color: #27ae60; border-width: 1.5px; }
+  .product-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+  .product-title { font-size: 14px; font-weight: 500; flex: 1; line-height: 1.4; }
+  .badge { font-size: 11px; padding: 3px 10px; border-radius: 10px; white-space: nowrap; }
+  .badge.stock { background: #d5f5e3; color: #1e8449; }
+  .badge.nostock { background: #f5f5f5; color: #888; }
+  .product-meta { display: flex; gap: 16px; font-size: 13px; color: #555; }
+  .product-meta span { display: flex; align-items: center; gap: 4px; }
+  .price-tag { color: #B12704; font-weight: 500; }
+  .product-actions { display: flex; gap: 8px; margin-top: 12px; border-top: 0.5px solid #eee; padding-top: 10px; }
+  .btn-sm { flex: 1; padding: 7px; font-size: 13px; border-radius: 6px; border: 0.5px solid #ccc; background: #fafafa; cursor: pointer; color: #333; }
+  .btn-sm:hover { background: #f0f0f0; }
+  .btn-buy { background: #e47911; color: #fff; border-color: #e47911; }
+  .btn-buy:hover { background: #c96a00; }
+  .btn-del { color: #c0392b; border-color: #e8c0bb; }
+  .btn-del:hover { background: #fdf0ee; }
+
+  .last-check { font-size: 11px; color: #aaa; margin-top: 6px; }
+
+  .empty { text-align: center; padding: 2rem; color: #aaa; font-size: 14px; }
+
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛒 Amazon Watcher</h1>
+  <span id="statusBadge">בודק...</span>
+</header>
+
+<div class="container">
+  <div class="add-card">
+    <h2>הוסף מוצר למעקב</h2>
+    <div class="field">
+      <label>לינק (אמזון או Pokehood)</label>
+      <input type="text" id="linkInput" placeholder="https://www.amazon.com/dp/... או il.pokehood.com/...">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>מחיר מקסימום ($)</label>
+        <input type="number" id="maxPrice" placeholder="לדוגמה: 60" min="0" step="0.01">
+      </div>
+    </div>
+    <button class="primary" id="addBtn" onclick="addProduct()">+ הוסף למעקב</button>
+    <div id="error"></div>
+  </div>
+
+  <div class="section-title" id="listTitle"></div>
+  <div id="productList"></div>
+</div>
+
+<script>
+async function loadProducts() {
+  const res = await fetch('/api/products');
+  const products = await res.json();
+  renderProducts(products);
+  document.getElementById('listTitle').textContent =
+    products.length ? `${products.length} מוצרים במעקב` : '';
+  document.getElementById('statusBadge').textContent =
+    `בודק כל 60 שניות`;
+}
+
+function renderProducts(products) {
+  const list = document.getElementById('productList');
+  if (!products.length) {
+    list.innerHTML = '<div class="empty">אין מוצרים במעקב עדיין<br>הוסף לינק מהוואטסאפ למעלה</div>';
+    return;
+  }
+  list.innerHTML = products.map(p => {
+    const inStock = p.last_stock;
+    const price = p.last_price ? `$${p.last_price.toFixed(2)}` : 'מחיר לא זמין';
+    const buyUrl = `https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${p.asin}&Quantity.1=1`;
+    return `
+    <div class="product-card ${inStock ? 'in-stock' : ''}">
+      <div class="product-header">
+        <div class="product-title">${p.last_title || p.asin}</div>
+        <span class="badge ${inStock ? 'stock' : 'nostock'}">${inStock ? '✓ יש מלאי' : 'אין מלאי'}</span>
+      </div>
+      <div class="product-meta">
+        <span>מחיר: <span class="price-tag">${price}</span></span>
+        <span>מקסימום: $${parseFloat(p.max_price).toFixed(2)}</span>
+      </div>
+      <div class="last-check">בדיקה אחרונה: ${p.last_check || '—'} · ASIN: ${p.asin}</div>
+      <div class="product-actions">
+        ${inStock ? `<button class="btn-sm btn-buy" onclick="window.open('${buyUrl}','_blank')">🛒 קנה עכשיו</button>` : ''}
+        <button class="btn-sm" onclick="manualCheck('${p.asin}')">🔄 בדוק עכשיו</button>
+        <button class="btn-sm" onclick="togglePause('${p.asin}')">${p.paused ? '▶ המשך' : '⏸ עצור'}</button>
+        <button class="btn-sm btn-del" onclick="deleteProduct('${p.asin}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addProduct() {
+  const url = document.getElementById('linkInput').value.trim();
+  const maxPrice = document.getElementById('maxPrice').value.trim();
+  const errEl = document.getElementById('error');
+  const btn = document.getElementById('addBtn');
+
+  if (!url) { showError('הכנס לינק'); return; }
+  if (!maxPrice) { showError('הכנס מחיר מקסימום'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'מוסיף ובודק...';
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/products', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ url, max_price: maxPrice })
+    });
+    const data = await res.json();
+    if (!res.ok) { showError(data.error || 'שגיאה'); return; }
+    document.getElementById('linkInput').value = '';
+    document.getElementById('maxPrice').value = '';
+    loadProducts();
+  } catch(e) {
+    showError('שגיאת חיבור לשרת');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '+ הוסף למעקב';
+  }
+}
+
+async function deleteProduct(asin) {
+  await fetch(`/api/products/${asin}`, {method:'DELETE'});
+  loadProducts();
+}
+
+async function togglePause(asin) {
+  await fetch(`/api/products/${asin}/pause`, {method:'POST'});
+  loadProducts();
+}
+
+async function manualCheck(asin) {
+  const res = await fetch(`/api/products/${asin}/check`, {method:'POST'});
+  const data = await res.json();
+  alert(`${data.title}\nמלאי: ${data.in_stock ? 'יש ✓' : 'אין ✗'}\nמחיר: ${data.price ? '$'+data.price : 'לא זמין'}`);
+  loadProducts();
+}
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+loadProducts();
+setInterval(loadProducts, 30000);
+</script>
+</body>
+</html>
