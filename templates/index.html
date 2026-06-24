@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -101,7 +103,7 @@ function renderProducts(products) {
   list.innerHTML = products.map(p => {
     const inStock = p.last_stock;
     const price = p.last_price ? `$${p.last_price.toFixed(2)}` : 'מחיר לא זמין';
-    const buyUrl = `https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${p.asin}&Quantity.1=1`;
+    const buyUrl = `const buyUrl = `https://www.amazon.com/dp/${p.asin}`;
     return `
     <div class="product-card ${inStock ? 'in-stock' : ''}">
       <div class="product-header">
