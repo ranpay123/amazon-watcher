@@ -104,6 +104,7 @@ function renderProducts(products) {
     const inStock = p.last_stock;
     const price = p.last_price ? `$${p.last_price.toFixed(2)}` : 'מחיר לא זמין';
     const buyUrl = `const buyUrl = `https://www.amazon.com/dp/${p.asin}`;
+    const buyUrl = `https://www.amazon.com/dp/${p.asin}/`;
     return `
     <div class="product-card ${inStock ? 'in-stock' : ''}">
       <div class="product-header">
